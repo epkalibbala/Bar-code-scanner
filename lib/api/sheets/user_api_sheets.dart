@@ -38,7 +38,7 @@ static Future int() async {
     _secondarycodes = await _getWorkSheet(spreadsheet, title: 'Secondary-Primary');
 
     final firstRow = ItemFields.getFields();
-    _updateSheet!.values.insertRow(1, firstRow);
+    _updateSheet!.values.insertRow(1, firstRow); // FirstRow is the list of column titles
     _loggedSheet!.values.insertRow(1, firstRow);
     _itemNotFoundSheet!.values.insertRow(1, firstRow);
   } catch (e) {
@@ -47,7 +47,7 @@ static Future int() async {
   
 }
 
-static Future<Worksheet> _getWorkSheet(
+static Future<Worksheet> _getWorkSheet( // Function to return 
   Spreadsheet spreadsheet, {
     required String title,
   }

@@ -27,6 +27,7 @@ class _MyAppState extends State<MyApp> {
   String _resultCodes = '';
   String displayResult = '';
   List<Secondary> itemsId = [];
+  List<String> barcodesSimilarItem = [];
   List<Item> items = [];
   late TextEditingController controllerVolume;
   late TextEditingController controllerDescription;
@@ -39,7 +40,7 @@ class _MyAppState extends State<MyApp> {
     controllerVolume = TextEditingController();
     controllerDescription = TextEditingController();
 
-    getItems().then((value) {
+    getItems().then((value) { // Fetching stock
       Map<dynamic, dynamic> data = {};
       items.forEach((item) {
         data[item.code] = {
@@ -80,7 +81,7 @@ class _MyAppState extends State<MyApp> {
       });
     });
     // print('data');
-    getItemsCodes().then((value) {
+    getItemsCodes().then((value) { // Fetching secondary barcodes data
       Map<dynamic, dynamic> dataCodes = {};
       itemsId.forEach((item) {
         dataCodes[item.barcode] = {
@@ -115,18 +116,23 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  int countSpecificValueOccurrences(Map dataCodes, String fieldName, dynamic targetValue) {
-  int count = 0;
-  dataCodes.values.forEach((value) {
-    if (value[fieldName] == targetValue) {
-      count++;
-    }
-  });
-  return count;
-}
-
+  int countSpecificValueOccurrences( // Count of how many barcodes have similar itemIDs
+      Map dataCodes, String fieldName, dynamic targetValue) {
+    int count = 0;
+    dataCodes.values.forEach((value) {
+      if (value[fieldName] == targetValue) {
+        // Count of items under specific bar code
+        count++;
+        barcodesSimilarItem.add(dataCodes.keys.firstWhere( // List of barcodes with similar item id
+      (key) => dataCodes[key] == value,
+    ));
+      }
+    });
+    return count;
+  }
 
   Future<void> _scanBarcode() async {
+    barcodesSimilarItem.clear(); // Clear barcode list under single item
     try {
       ScanResult result = await BarcodeScanner.scan();
       setState(() {
@@ -137,7 +143,8 @@ class _MyAppState extends State<MyApp> {
         var decodedResult = jsonDecode(_resultCodes);
 
         if (decodedResult.containsKey(_barcode)) {
-          var itemId = decodedResult[_barcode]['item_id']; // The bar code reads from the secondary codes file, returns item id which is used to identify the item
+          var itemId = decodedResult[_barcode][
+              'item_id']; // The bar code reads from the secondary codes file, returns item id which is used to identify the item
           if (itemsId.isNotEmpty) {
             var decodedResult = jsonDecode(_result);
             if (decodedResult.containsKey(itemId)) {
@@ -157,11 +164,12 @@ class _MyAppState extends State<MyApp> {
 
               setState(() {
                 displayResult =
-                    'Description: $description\nExpected Quantity: $expQuantity\nCurrent Quantity (PC): $quantityPC\nCurrent Quantity (BX/CTN/DZ): $quantityBX\nPrice: ${formatter.format(int.parse(price))}\nCount of items under barcode: ${countSpecificValueOccurrences(_dataCodes,'item_id', itemId)}\n\nAs of: $formattedDate';
+                    'Description: $description\nExpected Quantity: $expQuantity\nCurrent Quantity (PC): $quantityPC\nCurrent Quantity (BX/CTN/DZ): $quantityBX\nPrice: ${formatter.format(int.parse(price))}\nCount of items under barcode: ${countSpecificValueOccurrences(_dataCodes, 'item_id', itemId)}\nList of item barcodes:\n${barcodesSimilarItem.join(', ')}\n\nAs of: $formattedDate';
                 // print(displayResult);
                 // print("result one");
               });
               final item = {
+                ItemFields.code: itemId,
                 ItemFields.id: _barcode,
                 ItemFields.description: description,
                 ItemFields.quantityPC: quantityPC,
@@ -240,18 +248,21 @@ class _MyAppState extends State<MyApp> {
         ),
         body: Stack(children: [
           Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text('Barcode: $_barcode'),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: _scanBarcode,
-                  child: const Text('Scan Barcode'),
-                ),
-                const SizedBox(height: 20),
-                _barcode.isNotEmpty ? Text(displayResult) : const Text(""),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text('Scanned Barcode: $_barcode'),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: _scanBarcode,
+                    child: const Text('Scan Barcode'),
+                  ),
+                  const SizedBox(height: 20),
+                  _barcode.isNotEmpty ? Text(displayResult) : const Text(""),
+                ],
+              ),
             ),
           ),
           DraggableScrollableSheet(
@@ -287,7 +298,9 @@ class _MyAppState extends State<MyApp> {
                               ));
                         }
                         if (displayResult == 'Item not found') {
+                          // Fires if displayCode is changed to Item not found
                           return Card(
+                              // The card has two fields which take quantity and description
                               margin: EdgeInsets.zero,
                               elevation: 5,
                               child: Padding(
@@ -401,6 +414,7 @@ class _MyAppState extends State<MyApp> {
                               ));
                         }
                         return Card(
+                            // Card returns with field to update quantity on shelf
                             margin: EdgeInsets.zero,
                             elevation: 5,
                             child: Padding(
@@ -442,25 +456,44 @@ class _MyAppState extends State<MyApp> {
                                         final isValid = form.validate();
                                         if (isValid) {
                                           FocusScope.of(context).unfocus();
-                                          if (_result.isNotEmpty) {
+                                          if (_resultCodes.isNotEmpty) {
                                             var decodedResult =
-                                                jsonDecode(_result);
+                                                jsonDecode(_resultCodes);
+
                                             if (decodedResult
                                                 .containsKey(_barcode)) {
-                                              var description =
-                                                  decodedResult[_barcode]
-                                                      ['Description'];
-                                              // setState(() {
-                                              final item = {
-                                                ItemFields.id: _barcode,
-                                                ItemFields.description:
-                                                    description,
-                                                ItemFields.date: DateTime.now()
-                                                    .toIso8601String(),
-                                                ItemFields.shelfQuantity:
-                                                    controllerVolume.text
-                                              };
-                                              await UserSheetsApi.insert([item])
+                                              var itemId = decodedResult[
+                                                      _barcode][
+                                                  'item_id']; // The bar code reads from the secondary codes file, returns item id which is used to identify the item
+                                              if (itemsId.isNotEmpty) {
+                                                var decodedResult =
+                                                    jsonDecode(_result);
+                                                if (decodedResult
+                                                    .containsKey(itemId)) {
+                                                  var description =
+                                                      decodedResult[itemId]
+                                                          ['Description'];
+                                                  var quantityPC = decodedResult[itemId]['Qty_pc'];
+                                                  var quantityBX = decodedResult[itemId]['Qty_bx'];
+                                                  var expQuantity = decodedResult[itemId]['exp_Qty'];
+                                                  final item = { // Details sending updates of stock to google sheets
+                                                    ItemFields.code: itemId,
+                                                    ItemFields.id: _barcode,
+                                                    ItemFields.description:
+                                                        description,
+                                                    ItemFields.quantityPC:
+                                                        quantityPC,
+                                                    ItemFields.quantityBX:
+                                                        quantityBX,
+                                                    ItemFields.expQuantity:
+                                                        expQuantity,
+                                                    ItemFields.date:
+                                                        DateTime.now()
+                                                            .toIso8601String(),
+                                                    ItemFields.shelfQuantity:
+                                                        controllerVolume.text
+                                                  };
+                                                  await UserSheetsApi.insert([item])
                                                   .then((value) {
                                                 const snackdemo = SnackBar(
                                                   content: Text(
@@ -475,7 +508,8 @@ class _MyAppState extends State<MyApp> {
                                                     .showSnackBar(snackdemo);
                                                 controllerVolume.clear();
                                               });
-                                              // });
+                                                }
+                                              }
                                             } else {
                                               setState(() {
                                                 displayResult =
@@ -483,6 +517,7 @@ class _MyAppState extends State<MyApp> {
                                               });
                                             }
                                           }
+                                          
                                         }
                                       },
                                       child: const Text('Send update'),
